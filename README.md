@@ -1,6 +1,6 @@
-# WatermarkRemoval-WDNet-WACV2021
-Thank you for your attention.
-## Citation
+# pet_WDNet
+My pet pet WDNet model
+## Original Model Citation WatermarkRemoval-WDNet-WACV2021
 Please cite the related works in your publications if it helps your research:
 ```
 @InProceedings{Liu_2021_WACV,
@@ -14,9 +14,4 @@ page = {3685-3693},
 year = {2021}
 }
 ```
-## Dataset CLWD
-[CLWD](https://drive.google.com/file/d/17y1gkUhIV6rZJg1gMG-gzVMnH27fm4Ij/view?usp=sharing)
-
-## Pretraied Model
-Thanks for the help of @[ChaiHuanhuan](https://github.com/ChaiHuanhuan), who trained the WDNet and provided a pretrained [WDNet model](https://drive.google.com/drive/folders/1UYOtWmYZQQmCPMLVrstVxhPYW4Jngo-g?usp=sharing). This model is trained for 50 epoches.
 
