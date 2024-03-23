@@ -170,11 +170,11 @@ class WDNet(object):
             self.BCE_loss = nn.BCELoss()
         self.G.apply(weight_init)
         self.D.apply(weight_init)
-        #self.load()
-        print('---------- Networks architecture -------------')
+        self.load()
+        #print('---------- Networks architecture -------------')
         #utils.print_network(self.G)
         #utils.print_network(self.D)
-        print('-----------------------------------------------')
+        #print('-----------------------------------------------')
 
         # fixed noise & condition
         self.sample_z_ = torch.zeros((self.sample_num, self.z_dim))
@@ -207,17 +207,17 @@ class WDNet(object):
             #self.y_real_, self.y_fake_ = self.y_real_.cuda(), self.y_fake_.cuda()
         vgg = Vgg16().type(torch.cuda.FloatTensor)
         self.D.train()
-        print('training start!!')
+        print('Start training!')
         start_time = time.time()
-        writer=SummaryWriter(log_dir='log/ex_WDNet')
+        writer=SummaryWriter(log_dir=self.log_dir) # 'log/ex_WDNet'
         lenth=self.data_loader.dataset.__len__()
         iter_all=0
         for epoch in range(self.epoch):
             self.G.train()
             epoch_start_time = time.time()
             for iter, (x_, y_, mask, balance, alpha, w) in enumerate(self.data_loader):
-                iter_all+=1#iter+epoch*(lenth//self.batch_size)
-                if iter ==  lenth// self.batch_size:
+                iter_all+=1 #iter+epoch*(lenth//self.batch_size)
+                if iter ==  lenth // self.batch_size:
                     break
                 #y_vec_ = torch.zeros((self.batch_size, self.class_num)).scatter_(1, y_.type(torch.LongTensor).unsqueeze(1), 1)
                 #y_fill_ = y_vec_.unsqueeze(2).unsqueeze(3).expand(self.batch_size, self.class_num, self.input_size, self.input_size)
@@ -279,12 +279,13 @@ class WDNet(object):
         print("Training finish!... save training results")
 
         self.save()
+
     def save(self):
-        torch.save(self.G.state_dict(), os.path.join('WDNet_G.pkl'))
-        torch.save(self.D.state_dict(), os.path.join('WDNet_D.pkl'))
+        torch.save(self.G.state_dict(), os.path.join(self.save_dir,'WDNet_G.pkl'))
+        torch.save(self.D.state_dict(), os.path.join(self.save_dir,'WDNet_D.pkl'))
+        print(f'Model saved to {self.save_dir}')
 
     def load(self):
-        save_dir = os.path.join(self.save_dir, self.dataset, self.model_name)
-
-        self.G.load_state_dict(torch.load(os.path.join('WDNet_G.pkl')))
-        self.D.load_state_dict(torch.load(os.path.join('WDNet_D.pkl')))
+        self.G.load_state_dict(torch.load(os.path.join(self.save_dir,'WDNet_G.pkl')))
+        self.D.load_state_dict(torch.load(os.path.join(self.save_dir,'WDNet_D.pkl')))
+        print(f'Model loaded from {self.save_dir}')
