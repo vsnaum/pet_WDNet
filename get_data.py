@@ -6,12 +6,13 @@ import os
 import sys
 import torch
 from torchvision import datasets, transforms
+
 class Getdata(torch.utils.data.Dataset):
-	def __init__(self,dataset):
+	def __init__(self,dataset_dir):
 		self.transform_norm=transforms.Compose([transforms.ToTensor()])
 		self.transform_tensor= transforms.ToTensor()
 		#root = './dataset/CLWD/train/' 
-		root = dataset + 'train/'
+		root = dataset_dir + '/train/'
 		self.imageJ_path=osp.join(root,'Watermarked_image','%s.jpg')
 		self.imageI_path=osp.join(root,'Watermark_free_image','%s.jpg')
 		self.mask_path=osp.join(root,'Mask','%s.png')

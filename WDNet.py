@@ -2,10 +2,10 @@ import torch, time, os, pickle
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
-from WDNet_main.dataloader import dataloader
-from WDNet_main.unet_parts import *
+from dataloader import dataloader
+from unet_parts import *
 from tensorboardX import SummaryWriter
-from WDNet_main.vgg import Vgg16
+from vgg import Vgg16
 class generator(nn.Module):
     # Network Architecture is exactly same as in infoGAN (https://arxiv.org/abs/1606.03657)
     # Architecture : FC1024_BR-FC7x7x128_BR-(64)4dc2s_BR-(1)4dc2s_S
@@ -137,6 +137,7 @@ class WDNet(object):
         self.dataset = args['dataset']
         self.log_dir = args['log_dir']
         self.gpu_mode = args['gpu_mode']
+        self.dataloader_workers = args['dataloader_workers']
         self.input_size = args['input_size']
         self.model_name = args['gan_type']
         self.z_dim = 62
@@ -144,7 +145,7 @@ class WDNet(object):
         self.sample_num = self.class_num ** 2
 
         # load dataset
-        self.data_loader = dataloader(self.dataset, self.input_size, self.batch_size)
+        self.data_loader = dataloader(self.dataset, self.batch_size, self.dataloader_workers)
         data = self.data_loader.__iter__().__next__()[0]
         def weight_init(m):
           classname=m.__class__.__name__
@@ -156,8 +157,8 @@ class WDNet(object):
         # networks init
         self.G = generator(3, 3)
         self.D = discriminator(input_dim=6, output_dim=1)
-        self.G_optimizer = optim.Adam(self.G.parameters(), lr=args.lrG, betas=(args.beta1, args.beta2))
-        self.D_optimizer = optim.Adam(self.D.parameters(), lr=args.lrD, betas=(args.beta1, args.beta2))
+        self.G_optimizer = optim.Adam(self.G.parameters(), lr=args['lrG'], betas=(args['beta1'], args['beta2']))
+        self.D_optimizer = optim.Adam(self.D.parameters(), lr=args['lrD'], betas=(args['beta1'], args['beta2']))
         
         if self.gpu_mode:
             self.G.cuda()
