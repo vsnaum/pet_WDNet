@@ -272,7 +272,7 @@ class WDNet(object):
                     writer.add_scalar('I_watermark_Loss', I_watermark_loss, iter_all)
                     writer.add_scalar('I_watermark2_Loss', I_watermark2_loss, iter_all)
                     writer.add_scalar('vgg_Loss', vgg_loss, iter_all)
-                if ((iter + 1) % 100) == 0:
+                if ((iter + 1) % 5) == 0:
                     print("Epoch: [%2d] [%4d/%4d] D_loss: %.8f, G_loss: %.8f" %
                           ((epoch + 1), (iter + 1), self.data_loader.dataset.__len__() // self.batch_size, D_loss.item(), G_writer))
             self.save()
