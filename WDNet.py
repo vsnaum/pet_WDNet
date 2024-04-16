@@ -12,6 +12,12 @@ def curr_dt():
     return datetime.datetime.now().strftime("%Y-%m-%d_%H-%M") 
 
 
+def write_log(text,save_dir):
+    with open(os.path.join(save_dir,'log.log'),'a') as f:
+        f.write(text+'\n')
+
+
+
 
 class generator(nn.Module):
     # Network Architecture is exactly same as in infoGAN (https://arxiv.org/abs/1606.03657)
@@ -280,12 +286,14 @@ class WDNet(object):
                     writer.add_scalar('I_watermark2_Loss', I_watermark2_loss, iter_all)
                     writer.add_scalar('vgg_Loss', vgg_loss, iter_all)
                 if ((iter + 1) % 5) == 0:
-                    print("Epoch: [%2d] [%4d/%4d] D_loss: %.8f, G_loss: %.8f" %
-                          ((epoch + 1), (iter + 1), self.data_loader.dataset.__len__() // self.batch_size, D_loss.item(), G_writer))
+                    log_text = "Epoch: [%2d] [%4d/%4d] D_loss: %.8f, G_loss: %.8f" % ((epoch + 1), (iter + 1), self.data_loader.dataset.__len__() // self.batch_size, D_loss.item(), G_writer)  
+                    print(log_text)
+                    write_log(log_text,self.save_dir)
+
             self.save()
         print("Training finish!... save training results")
 
-        self.save()
+        self.save(overwrtie=False)
 
     def save(self,overwrtie=True):
         if overwrtie:
