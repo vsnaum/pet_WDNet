@@ -8,8 +8,13 @@ from tensorboardX import SummaryWriter
 from vgg import Vgg16
 
 import datetime
-def curr_dt():
-    return datetime.datetime.now().strftime("%Y-%m-%d_%H-%M") 
+def curr_dt(seconds=False):
+    dt = datetime.datetime.now()
+    if seconds:
+        return dt.strftime("%Y-%m-%d_%H-%M-%S") 
+    else:
+        return dt.strftime("%Y-%m-%d_%H-%M") 
+     
 
 
 def write_log(text,save_dir):
@@ -286,7 +291,7 @@ class WDNet(object):
                     writer.add_scalar('I_watermark2_Loss', I_watermark2_loss, iter_all)
                     writer.add_scalar('vgg_Loss', vgg_loss, iter_all)
                 if ((iter + 1) % 5) == 0:
-                    log_text = "Epoch: [%2d] [%4d/%4d] D_loss: %.8f, G_loss: %.8f" % ((epoch + 1), (iter + 1), self.data_loader.dataset.__len__() // self.batch_size, D_loss.item(), G_writer)  
+                    log_text = f"{curr_dt(seconds=True)}   Epoch: [{(epoch + 1):2d}] [{(iter + 1):4d}/{self.data_loader.dataset.__len__() // self.batch_size:4d}] D_loss: {D_loss.item():8f}, G_loss: {G_writer:8f}" 
                     print(log_text)
                     write_log(log_text,self.save_dir)
 
