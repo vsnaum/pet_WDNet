@@ -6,6 +6,13 @@ from dataloader import dataloader
 from unet_parts import *
 from tensorboardX import SummaryWriter
 from vgg import Vgg16
+
+import datetime
+def curr_dt():
+    return datetime.datetime.now().strftime("%Y-%m-%d_%H-%M") 
+
+
+
 class generator(nn.Module):
     # Network Architecture is exactly same as in infoGAN (https://arxiv.org/abs/1606.03657)
     # Architecture : FC1024_BR-FC7x7x128_BR-(64)4dc2s_BR-(1)4dc2s_S
@@ -280,9 +287,13 @@ class WDNet(object):
 
         self.save()
 
-    def save(self):
-        torch.save(self.G.state_dict(), os.path.join(self.save_dir,'WDNet_G.pkl'))
-        torch.save(self.D.state_dict(), os.path.join(self.save_dir,'WDNet_D.pkl'))
+    def save(self,overwrtie=True):
+        if overwrtie:
+            torch.save(self.G.state_dict(), os.path.join(self.save_dir,'WDNet_G.pkl'))
+            torch.save(self.D.state_dict(), os.path.join(self.save_dir,'WDNet_D.pkl'))
+        else:
+            torch.save(self.G.state_dict(), os.path.join(self.save_dir,f'WDNet_G__{curr_dt()}.pkl'))
+            torch.save(self.D.state_dict(), os.path.join(self.save_dir,f'WDNet_D__{curr_dt()}.pkl'))
         print(f'Model saved to {self.save_dir}')
 
     def load(self):
