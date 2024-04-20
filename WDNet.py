@@ -7,6 +7,7 @@ from unet_parts import *
 from tensorboardX import SummaryWriter
 from vgg import Vgg16
 import pickle
+import pytorch_ssim
 
 import datetime
 def curr_dt(seconds=False):
@@ -173,7 +174,7 @@ class WDNet(object):
         # load dataset
         self.data_loader = dataloader(self.dataset, self.batch_size, self.dataloader_workers)
         self.data_loader_test = dataloader_test(self.dataset, self.batch_size, self.dataloader_workers)
-        data = self.data_loader.__iter__().__next__()[0]
+        #data = self.data_loader.__iter__().__next__()[0]
         def weight_init(m):
           classname=m.__class__.__name__
           if isinstance(m, nn.Conv2d):
@@ -195,6 +196,8 @@ class WDNet(object):
             self.loss_mse = nn.MSELoss().cuda()
         else:
             self.BCE_loss = nn.BCELoss()
+            self.loss_mse = nn.MSELoss()
+            self.l1loss=nn.L1Loss()
         self.G.apply(weight_init)
         self.D.apply(weight_init)
         self.load()
@@ -315,9 +318,14 @@ class WDNet(object):
             self.G.cuda()
 
         self.test_results = []
-        #mask_iou = 0.0
+        self.ssim = pytorch_ssim.SSIM()
         mask_bce = 0.0
         img_bce = 0.0
+        mask_mse = 0.0
+        img_mse = 0.0
+        img_l1 = 0.0
+        img_ssim = 0.0
+        mask_ssim= 0.0
         with torch.no_grad():
             for iter, (x_, y_, mask) in enumerate(self.data_loader_test):
                 if self.gpu_mode:
@@ -327,16 +335,28 @@ class WDNet(object):
                 G_ ,g_mask, _, _,_= self.G(x_)
                 mask_pred = (g_mask > (15.0/255.0)).float()
                 mask_truth = mask[:,1,:,:].unsqueeze(1)
-                #mask_iou += calc_iou(mask_pred,mask)
+
                 mask_bce += self.BCE_loss(mask_pred,mask_truth)
+                mask_mse += self.loss_mse(mask_pred,mask_truth)
+                mask_ssim += self.ssim(mask_pred,mask_truth)
+                
                 img_bce += self.BCE_loss(G_,y_)
-                self.test_results.append({'iter':iter+1, 'mask_BCE': mask_bce/(iter+1), 'img_BCE': img_bce/(iter+1)})
+                img_mse += self.loss_mse(G_,y_)
+                img_l1 += self.l1loss(G_,y_)
+                img_ssim += self.ssim(G_,y_)
+
+                iter_result = {'iter':iter+1, 'mask_BCE': mask_bce/(iter+1), 'mask_MSE': mask_mse/(iter+1), 'mask_SSIM': mask_ssim/(iter+1),
+                               'img_BCE': img_bce/(iter+1), 'img_MSE': img_mse/(iter+1), 'img_L1': img_l1/(iter+1), 'img_SSIM': img_ssim/(iter+1)}
+
+                self.test_results.append(iter_result)
                 if verbose:
-                    print(f'iter {iter+1}    mask_BCE : {mask_bce/(iter+1):4.3f}   img_BCE : {img_bce/(iter+1):4.3f}') #    mask_IoU : {mask_iou/(iter+1):4.3f}
+                    print(f"iter {iter_result['iter']:4d}     mask_BCE {iter_result['mask_BCE']:5.4f}   mask_MSE {iter_result['mask_MSE']:5.4f}   mask_SSIM {iter_result['mask_SSIM']:5.4f}     img_BCE {iter_result['img_BCE']:5.4f}   img_MSE {iter_result['img_MSE']:5.4f}   img_L1 {iter_result['img_L1']:5.4f}   img_SSIM {iter_result['img_SSIM']:5.4f}")
         
+        print(f"Results:    mask_BCE {iter_result['mask_BCE']:5.4f}    mask_BCE {iter_result['mask_BCE']:5.4f}   mask_MSE {iter_result['mask_MSE']:5.4f}   mask_SSIM {iter_result['mask_SSIM']:5.4f}     img_BCE {iter_result['img_BCE']:5.4f}   img_MSE {iter_result['img_MSE']:5.4f}   img_L1 {iter_result['img_L1']:5.4f}   img_SSIM {iter_result['img_SSIM']:5.4f}")
         with open(os.path.join(self.save_dir,'WDNet_test.pkl')) as f:
             pickle.dump(self.test_results,f)
             print(f'Test data saved to {self.save_dir}')
+        
 
     def save(self,overwrtie=True):
         if overwrtie:
