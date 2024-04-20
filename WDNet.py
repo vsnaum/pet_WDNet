@@ -2,10 +2,11 @@ import torch, time, os, pickle
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
-from dataloader import dataloader
+from dataloader import dataloader, dataloader_test
 from unet_parts import *
 from tensorboardX import SummaryWriter
 from vgg import Vgg16
+import pickle
 
 import datetime
 def curr_dt(seconds=False):
@@ -21,7 +22,14 @@ def write_log(text,save_dir):
     with open(os.path.join(save_dir,'log.log'),'a') as f:
         f.write(text+'\n')
 
-
+def calc_iou(prediction, ground_truth):
+    prediction, ground_truth = prediction.to('cpu'), ground_truth.to('cpu')
+    n_images = len(prediction)
+    intersection, union = 0, 0
+    for i in range(n_images):
+        intersection += np.logical_and(prediction[i].detach().numpy() > 0, ground_truth[i].detach().numpy() > 0).astype(np.float32).sum()
+        union += np.logical_or(prediction[i].detach().numpy() > 0, ground_truth[i].detach().numpy() > 0).astype(np.float32).sum()
+    return float(intersection) / union
 
 
 class generator(nn.Module):
@@ -164,6 +172,7 @@ class WDNet(object):
 
         # load dataset
         self.data_loader = dataloader(self.dataset, self.batch_size, self.dataloader_workers)
+        self.data_loader_test = dataloader_test(self.dataset, self.batch_size, self.dataloader_workers)
         data = self.data_loader.__iter__().__next__()[0]
         def weight_init(m):
           classname=m.__class__.__name__
@@ -295,10 +304,38 @@ class WDNet(object):
                     print(log_text)
                     write_log(log_text,self.save_dir)
 
-            self.save()
+            self.save(overwrtie=False)
         print("Training finish!... save training results")
 
-        self.save(overwrtie=False)
+        self.save()
+
+    def test(self):
+        self.G.eval()
+        if self.gpu_mode:
+            self.G.cuda()
+
+        self.test_results = []
+        #mask_iou = 0.0
+        mask_bce = 0.0
+        img_bce = 0.0
+        with torch.no_grad():
+            for iter, (x_, y_, mask) in enumerate(self.data_loader_test):
+                if self.gpu_mode:
+                    x_ = x_.cuda()
+                    y_ = y_.cuda()
+                    mask = mask.cuda()
+                G_ ,g_mask, _, _,_= self.G(x_)
+                mask_pred = (g_mask > (15.0/255.0)).float()
+                mask_truth = mask[:,1,:,:].unsqueeze(1)
+                #mask_iou += calc_iou(mask_pred,mask)
+                mask_bce += self.BCE_loss(mask_pred,mask_truth)
+                img_bce += self.BCE_loss(G_,y_)
+                self.test_results.append({'iter':iter+1, 'mask_BCE': mask_bce/(iter+1), 'img_BCE': img_bce/(iter+1)})
+                print(f'iter {iter+1}    mask_BCE : {mask_bce/(iter+1):4.3f}   img_BCE : {img_bce/(iter+1):4.3f}') #    mask_IoU : {mask_iou/(iter+1):4.3f}
+        
+        with open(os.path.join(self.save_dir,'WDNet_test.pkl')) as f:
+            pickle.dump(self.test_results,f)
+            print(f'Test data saved to {self.save_dir}')
 
     def save(self,overwrtie=True):
         if overwrtie:

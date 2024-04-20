@@ -6,3 +6,9 @@ def dataloader(dataset, batch_size, num_workers=0):
             Getdata(dataset),
             batch_size=batch_size, shuffle=True, num_workers=num_workers)
 	return data_loader
+
+def dataloader_test(dataset, batch_size, num_workers=0):
+	data_loader=DataLoader(
+            Getdata(dataset,train=False),
+            batch_size=batch_size, shuffle=True, num_workers=num_workers)
+	return data_loader
