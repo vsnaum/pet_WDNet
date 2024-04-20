@@ -1,5 +1,11 @@
 # pet_WDNet
-My pet pet WDNet model
+Original WDNet code modified and extended in oreder to:
+- easily train model in different enviroments: Yadex DataSphere, Google Colab, Local Machine
+- convert model to universal ONNX format
+- easily compare performance of WDNet versions
+
+One of the best models was used in pet-project telegram bot: https://t.me/simple_watermark_remover_bot
+
 ## Original Model Citation WatermarkRemoval-WDNet-WACV2021
 Please cite the related works in your publications if it helps your research:
 ```
