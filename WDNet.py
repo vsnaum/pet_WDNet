@@ -336,14 +336,14 @@ class WDNet(object):
                 mask_pred = (g_mask > (15.0/255.0)).float()
                 mask_truth = mask[:,1,:,:].unsqueeze(1)
 
-                mask_bce += self.BCE_loss(mask_pred,mask_truth)
-                mask_mse += self.loss_mse(mask_pred,mask_truth)
-                mask_ssim += self.ssim(mask_pred,mask_truth)
+                mask_bce += self.BCE_loss(mask_pred,mask_truth).item()
+                mask_mse += self.loss_mse(mask_pred,mask_truth).item()
+                mask_ssim += self.ssim(mask_pred,mask_truth).item()
                 
-                img_bce += self.BCE_loss(G_,y_)
-                img_mse += self.loss_mse(G_,y_)
-                img_l1 += self.l1loss(G_,y_)
-                img_ssim += self.ssim(G_,y_)
+                img_bce += self.BCE_loss(G_,y_).item()
+                img_mse += self.loss_mse(G_,y_).item()
+                img_l1 += self.l1loss(G_,y_).item()
+                img_ssim += self.ssim(G_,y_).item()
 
                 iter_result = {'iter':iter+1, 'mask_BCE': mask_bce/(iter+1), 'mask_MSE': mask_mse/(iter+1), 'mask_SSIM': mask_ssim/(iter+1),
                                'img_BCE': img_bce/(iter+1), 'img_MSE': img_mse/(iter+1), 'img_L1': img_l1/(iter+1), 'img_SSIM': img_ssim/(iter+1)}
@@ -353,7 +353,7 @@ class WDNet(object):
                     print(f"iter {iter_result['iter']:4d}     mask_BCE {iter_result['mask_BCE']:5.4f}   mask_MSE {iter_result['mask_MSE']:5.4f}   mask_SSIM {iter_result['mask_SSIM']:5.4f}     img_BCE {iter_result['img_BCE']:5.4f}   img_MSE {iter_result['img_MSE']:5.4f}   img_L1 {iter_result['img_L1']:5.4f}   img_SSIM {iter_result['img_SSIM']:5.4f}")
         
         print(f"Results:    mask_BCE {iter_result['mask_BCE']:5.4f}    mask_BCE {iter_result['mask_BCE']:5.4f}   mask_MSE {iter_result['mask_MSE']:5.4f}   mask_SSIM {iter_result['mask_SSIM']:5.4f}     img_BCE {iter_result['img_BCE']:5.4f}   img_MSE {iter_result['img_MSE']:5.4f}   img_L1 {iter_result['img_L1']:5.4f}   img_SSIM {iter_result['img_SSIM']:5.4f}")
-        with open(os.path.join(self.save_dir,'WDNet_test.pkl')) as f:
+        with open(os.path.join(self.save_dir,'WDNet_test.pkl'), 'wb') as f:
             pickle.dump(self.test_results,f)
             print(f'Test data saved to {self.save_dir}')
         
