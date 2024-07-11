@@ -1,4 +1,4 @@
-import torch, time, os, pickle
+import torch, time, os
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
@@ -6,22 +6,10 @@ from dataloader import dataloader, dataloader_test
 from unet_parts import *
 from tensorboardX import SummaryWriter
 from vgg import Vgg16
-import pickle
 import pytorch_ssim
-
-import datetime
-def curr_dt(seconds=False):
-    dt = datetime.datetime.now()
-    if seconds:
-        return dt.strftime("%Y-%m-%d_%H-%M-%S") 
-    else:
-        return dt.strftime("%Y-%m-%d_%H-%M") 
+import my_helpers as mh
      
 
-
-def write_log(text,save_dir):
-    with open(os.path.join(save_dir,'log.log'),'a') as f:
-        f.write(text+'\n')
 
 def calc_iou(prediction, ground_truth):
     prediction, ground_truth = prediction.to('cpu'), ground_truth.to('cpu')
@@ -131,8 +119,7 @@ class discriminator(nn.Module):
         super(discriminator, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
-        #self.input_size = input_size
-        #self.class_num = class_num
+
 
         self.conv = nn.Sequential(
             nn.Conv2d(self.input_dim, 64, 4, 2, 2),
@@ -160,13 +147,10 @@ class WDNet(object):
         self.epoch = args['epoch']
         self.batch_size = args['batch_size']
         self.save_dir = args['save_dir']
-        self.result_dir = args['result_dir']
         self.dataset = args['dataset']
-        self.log_dir = args['log_dir']
         self.gpu_mode = args['gpu_mode']
         self.dataloader_workers = args['dataloader_workers']
-        self.input_size = args['input_size']
-        self.model_name = args['gan_type']
+        self.train_hist = []
         self.z_dim = 62
         self.class_num = 3
         self.sample_num = self.class_num ** 2
@@ -174,14 +158,14 @@ class WDNet(object):
         # load dataset
         self.data_loader = dataloader(self.dataset, self.batch_size, self.dataloader_workers)
         self.data_loader_test = dataloader_test(self.dataset, self.batch_size, self.dataloader_workers)
-        #data = self.data_loader.__iter__().__next__()[0]
+
         def weight_init(m):
-          classname=m.__class__.__name__
           if isinstance(m, nn.Conv2d):
             nn.init.normal_(m.weight.data,0.0,0.02)
           elif isinstance(m, nn.BatchNorm2d):
             nn.init.normal_(m.weight.data,1.0,0.02)
             nn.init.constant_(m.bias.data,0)
+        
         # networks init
         self.G = generator(3, 3)
         self.D = discriminator(input_dim=6, output_dim=1)
@@ -200,11 +184,6 @@ class WDNet(object):
             self.l1loss=nn.L1Loss()
         self.G.apply(weight_init)
         self.D.apply(weight_init)
-        self.load()
-        #print('---------- Networks architecture -------------')
-        #utils.print_network(self.G)
-        #utils.print_network(self.D)
-        #print('-----------------------------------------------')
 
         # fixed noise & condition
         self.sample_z_ = torch.zeros((self.sample_num, self.z_dim))
@@ -225,35 +204,34 @@ class WDNet(object):
         if self.gpu_mode:
             self.sample_z_, self.sample_y_ = self.sample_z_.cuda(), self.sample_y_.cuda()
 
-    def train(self):
-        self.train_hist = {}
-        self.train_hist['D_loss'] = []
-        self.train_hist['G_loss'] = []
-        self.train_hist['per_epoch_time'] = []
-        self.train_hist['total_time'] = []
+        print('Model initiated. Do not forget load state dicts if you need pretrained model')
 
-        #self.y_real_, self.y_fake_ = torch.ones(self.batch_size, 1), torch.zeros(self.batch_size, 1)
-        #if self.gpu_mode:
-            #self.y_real_, self.y_fake_ = self.y_real_.cuda(), self.y_fake_.cuda()
+    def train(self, prev_train_hist=False):
+        if prev_train_hist:
+            self.train_hist = mh.pkl_load(os.path.join(self.save_dir,prev_train_hist))
+
+
         vgg = Vgg16().type(torch.cuda.FloatTensor)
         self.D.train()
-        print('Start training!')
-        start_time = time.time()
-        writer=SummaryWriter(log_dir=self.log_dir) # 'log/ex_WDNet'
+        print(f'{mh.curr_time()} Start training!')
+
+
         lenth=self.data_loader.dataset.__len__()
-        iter_all=0
+        if prev_train_hist:
+            iter_all=len(self.train_hist[-1]['iter_all'])
+        else:
+            iter_all = 0
+
         for epoch in range(self.epoch):
             self.G.train()
-            epoch_start_time = time.time()
+
             for iter, (x_, y_, mask, balance, alpha, w) in enumerate(self.data_loader):
                 iter_all+=1 #iter+epoch*(lenth//self.batch_size)
                 if iter ==  lenth // self.batch_size:
                     break
-                #y_vec_ = torch.zeros((self.batch_size, self.class_num)).scatter_(1, y_.type(torch.LongTensor).unsqueeze(1), 1)
-                #y_fill_ = y_vec_.unsqueeze(2).unsqueeze(3).expand(self.batch_size, self.class_num, self.input_size, self.input_size)
+
                 if self.gpu_mode:
                     x_, y_, mask, balance, alpha, w=x_.cuda(), y_.cuda(), mask.cuda(), balance.cuda(), alpha.cuda(), w.cuda()
-                    #x_, z_, y_vec_, y_fill_ = x_.cuda(), z_.cuda(), y_vec_.cuda(), y_fill_.cuda()
 
                 # update D network
                 if ((iter+1)%3)==0 :
@@ -267,8 +245,6 @@ class WDNet(object):
                   D_fake_loss = self.BCE_loss(D_fake, torch.zeros_like(D_fake))
   
                   D_loss = 0.5*D_real_loss + 0.5*D_fake_loss
-                  #self.train_hist['D_loss'].append(D_loss.item())
-                  D_writer=D_loss.item()
                   D_loss.backward()
                   self.D_optimizer.step()
 
@@ -283,7 +259,7 @@ class WDNet(object):
                 vgg_loss=0.0
                 for j in range (3):
                   vgg_loss+= self.loss_mse(feature_G[j],feature_real[j])
-                #self.train_hist['G_loss'].append(G_loss.item())
+
                 mask_loss=self.l1loss(g_mask*balance,mask*balance)*balance.size(0)*balance.size(1)*balance.size(2)*balance.size(3)/balance.sum()
                 w_loss=self.l1loss(g_w*mask,w*mask)*mask.size(0)*mask.size(1)*mask.size(2)*mask.size(3)/mask.sum()
                 alpha_loss=self.l1loss(g_alpha*mask,alpha*mask)*mask.size(0)*mask.size(1)*mask.size(2)*mask.size(3)/mask.sum()
@@ -293,24 +269,30 @@ class WDNet(object):
                 G_loss=G_loss+10.0*mask_loss+10.0*w_loss+10.0*alpha_loss+50.0*(0.7*I_watermark2_loss+0.3*I_watermark_loss)+1e-2*vgg_loss
                 G_loss.backward()
                 self.G_optimizer.step()
-                if((iter+1)%100) ==0:
-                    writer.add_scalar('G_Loss', G_writer, iter_all)
-                    writer.add_scalar('D_Loss', D_loss.item(), iter_all)
-                    writer.add_scalar('W_Loss', w_loss, iter_all)
-                    writer.add_scalar('alpha_Loss', alpha_loss, iter_all)
-                    writer.add_scalar('mask_Loss', mask_loss, iter_all)
-                    writer.add_scalar('I_watermark_Loss', I_watermark_loss, iter_all)
-                    writer.add_scalar('I_watermark2_Loss', I_watermark2_loss, iter_all)
-                    writer.add_scalar('vgg_Loss', vgg_loss, iter_all)
-                if ((iter + 1) % 5) == 0:
-                    log_text = f"{curr_dt(seconds=True)}   Epoch: [{(epoch + 1):2d}] [{(iter + 1):4d}/{self.data_loader.dataset.__len__() // self.batch_size:4d}] D_loss: {D_loss.item():8f}, G_loss: {G_writer:8f}" 
+
+                if ((iter+1)%100) == 0:
+                    time_stamp = mh.curr_time()
+
+                    self.train_hist.append({})
+                    self.train_hist[-1]['time_stamp'] = time_stamp
+                    self.train_hist[-1]['epoch'] = epoch + 1
+                    self.train_hist[-1]['iter_all'] = iter_all
+                    self.train_hist[-1]['G_Loss'] = G_writer
+                    self.train_hist[-1]['D_Loss'] = D_loss.item()
+                    self.train_hist[-1]['W_Loss'] = w_loss
+                    self.train_hist[-1]['alpha_Loss'] = alpha_loss
+                    self.train_hist[-1]['mask_Loss'] = mask_loss
+                    self.train_hist[-1]['I_watermark_Loss'] = I_watermark_loss
+                    self.train_hist[-1]['I_watermark2_Loss'] = I_watermark2_loss
+                    self.train_hist[-1]['vgg_Loss'] = vgg_loss
+
+                    
+                
+                    log_text = f"{time_stamp}   Epoch: [{(epoch + 1):2d}] [{(iter + 1):4d}/{self.data_loader.dataset.__len__() // self.batch_size:4d}] D_loss: {D_loss.item():8f}, G_loss: {G_writer:8f}" 
                     print(log_text)
-                    write_log(log_text,self.save_dir)
+                    self.save(prefix = time_stamp)
 
-            self.save(overwrtie=False)
-        print("Training finish!... save training results")
-
-        self.save()
+        print(f"{mh.curr_time()} Training finished!")
 
     def test(self,verbose=False):
         self.G.eval()
@@ -353,21 +335,29 @@ class WDNet(object):
                     print(f"iter {iter_result['iter']:4d}     mask_BCE {iter_result['mask_BCE']:5.4f}   mask_MSE {iter_result['mask_MSE']:5.4f}   mask_SSIM {iter_result['mask_SSIM']:5.4f}     img_BCE {iter_result['img_BCE']:5.4f}   img_MSE {iter_result['img_MSE']:5.4f}   img_L1 {iter_result['img_L1']:5.4f}   img_SSIM {iter_result['img_SSIM']:5.4f}")
         
         print(f"Results:    mask_BCE {iter_result['mask_BCE']:5.4f}    mask_BCE {iter_result['mask_BCE']:5.4f}   mask_MSE {iter_result['mask_MSE']:5.4f}   mask_SSIM {iter_result['mask_SSIM']:5.4f}     img_BCE {iter_result['img_BCE']:5.4f}   img_MSE {iter_result['img_MSE']:5.4f}   img_L1 {iter_result['img_L1']:5.4f}   img_SSIM {iter_result['img_SSIM']:5.4f}")
-        with open(os.path.join(self.save_dir,'WDNet_test.pkl'), 'wb') as f:
-            pickle.dump(self.test_results,f)
-            print(f'Test data saved to {self.save_dir}')
+        
+        mh.pkl_dump(os.path.join(self.save_dir,'WDNet_test.pkl'),self.test_results)
+        print(f'Test data saved to {self.save_dir}')
+
+            
         
 
-    def save(self,overwrtie=True):
-        if overwrtie:
-            torch.save(self.G.state_dict(), os.path.join(self.save_dir,'WDNet_G.pkl'))
-            torch.save(self.D.state_dict(), os.path.join(self.save_dir,'WDNet_D.pkl'))
+    def save(self,prefix=False):
+        if prefix:
+            torch.save(self.G.state_dict(), os.path.join(self.save_dir,f'{prefix}__WDNet_G.sd'))
+            torch.save(self.D.state_dict(), os.path.join(self.save_dir,f'{prefix}__WDNet_D.sd'))
+            mh.pkl_dump(os.path.join(self.save_dir,f'{prefix}__train_hist.pkl'),self.train_hist)
         else:
-            torch.save(self.G.state_dict(), os.path.join(self.save_dir,f'WDNet_G__{curr_dt()}.pkl'))
-            torch.save(self.D.state_dict(), os.path.join(self.save_dir,f'WDNet_D__{curr_dt()}.pkl'))
-        print(f'Model saved to {self.save_dir}')
+            torch.save(self.G.state_dict(), os.path.join(self.save_dir,f'WDNet_G.sd'))
+            torch.save(self.D.state_dict(), os.path.join(self.save_dir,f'WDNet_D.sd'))
+            mh.pkl_dump(os.path.join(self.save_dir,f'train_hist.pkl'),self.train_hist)
+        print(f'Model saved to {self.save_dir}, prefix={prefix}')
 
-    def load(self):
-        self.G.load_state_dict(torch.load(os.path.join(self.save_dir,'WDNet_G.pkl')))
-        self.D.load_state_dict(torch.load(os.path.join(self.save_dir,'WDNet_D.pkl')))
-        print(f'Model loaded from {self.save_dir}')
+    def load(self,prefix=False, load_train_hist=False):
+        if prefix:
+            self.G.load_state_dict(torch.load(os.path.join(self.save_dir,f'{prefix}__WDNet_G.sd')))
+            self.D.load_state_dict(torch.load(os.path.join(self.save_dir,f'{prefix}__WDNet_D.sd')))
+        else:
+            self.G.load_state_dict(torch.load(os.path.join(self.save_dir,f'WDNet_G.sd')))
+            self.D.load_state_dict(torch.load(os.path.join(self.save_dir,f'WDNet_D.sd')))
+        print(f'Model loaded from {self.save_dir}, prefix={prefix}')
